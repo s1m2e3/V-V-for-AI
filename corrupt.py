@@ -12,7 +12,9 @@ import numpy as np
 import matplotlib.pyplot as plt
 import argparse
 import shutil
+import yaml
 import copy
+import subprocess
 
 random.seed(108)
 
@@ -204,3 +206,31 @@ if __name__ == "__main__":
     move_files_to_folder(train_annotations, 'annotations/train/')
     move_files_to_folder(val_annotations, 'annotations/val/')
     move_files_to_folder(test_annotations, 'annotations/test/')
+
+    currentdir = os.getcwd()
+    os.rename(currentdir+"/annotations",currentdir+"/labels")
+    os.chdir("../../yolov5/data")
+
+    with open("coco128.yaml", "r") as stream:
+        try:
+
+            data=yaml.safe_load(stream)
+            data['train'] = path+"/images/train/" 
+            data["val"] = path+"/images/val/"
+            data["test"] = path+"/images/test/"
+            data["nc"] = 4
+            data["names"] = ["trafficlight","stop", "speedlimit","crosswalk"]
+    
+        except yaml.YAMLError as exc:
+            print(exc)
+
+    name= "road_sign_data" + added + ".yaml"
+    stream = open(name, 'w')
+    yaml.dump(data, stream)
+    stream.close()
+    name_train = "python3 train.py --img 640 --cfg yolov5s.yaml --hyp hyp.scratch.yaml --batch 32 --epochs 100 --data"+ name +"--weights yolov5s.pt --workers 24 --name yolo_road_det"+added
+    os.chdir("../")
+    subprocess(name_train)
+    name_test = "python3 test.py --weights runs/train/"+"yolo_road_det"+added+"/weights/best.pt --data"+ name +"--task test --name "+ "yolo_road_det"+added
+    
+    
