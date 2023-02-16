@@ -2,6 +2,7 @@ import torch
 from IPython.display import Image  # for displaying images
 import os 
 import random
+import time
 import shutil
 from sklearn.model_selection import train_test_split
 import xml.etree.ElementTree as ET
@@ -95,6 +96,7 @@ def convert_to_yolov5(info_dict):
     print("\n".join(print_buffer), file= open(save_file_name, "w"))
 #Utility function to move images 
 def move_files_to_folder(list_of_files, destination_folder):
+    os.mkdir(destination_folder)
     for f in list_of_files:
         try:
             shutil.move(f, destination_folder)
@@ -105,38 +107,50 @@ def move_files_to_folder(list_of_files, destination_folder):
 
 def corrupt_dataset(corruption_name,severity,apply_on_train,apply_on_test,train_images,val_images,test_images):
     
+
     train_names = copy.deepcopy(train_images)
     val_names = copy.deepcopy(val_images)
     test_names = copy.deepcopy(test_images)
     
+    
     if apply_on_train:
 
         train_images = [np.asarray(Image.open(image)) for image in train_images]
-        train_images = [imagecorruptions.corrupt(image,corruption_name,severity) for image in train_images]
-        train_images = [Image.fromarray(np.uint8(image)).convert('RGB') for image in train_images]
-        for i in range(train_images):
-            train_images[i].save(train_names[i],"PNG")
+        train_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in train_images]
+        train_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in train_images]
+        
+        for i in range(len(train_images)):
+            image = Image.fromarray(train_images[i].astype('uint8'), 'RGB')
+            image.save(train_names[i],"PNG")
 
         val_images = [np.asarray(Image.open(image)) for image in val_images]
-        val_images = [imagecorruptions.corrupt(image,corruption_name,severity) for image in val_images]
-        val_images = [Image.fromarray(np.uint8(image)).convert('RGB') for image in val_images]
-        for i in range(val_images):
-            val_images[i].save(val_names[i],"PNG")
+        val_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in val_images]
+        val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in val_images]
+        
+        for i in range(len(val_images)):
+            image = Image.fromarray(val_images[i].astype('uint8'), 'RGB')
+            image.save(val_names[i],"PNG")
 
     if apply_on_test:
         
         test_images = [np.asarray(Image.open(image)) for image in test_images]
-        test_images = [imagecorruptions.corrupt(image,corruption_name,severity) for image in test_images]
-        test_images = [Image.fromarray(np.uint8(image)).convert('RGB') for image in test_images]
-        for i in range(test_images):
-            test_images[i].save(test_names[i],"PNG")
-
-        val_images = [np.asarray(Image.open(image)) for image in val_images]
-        val_images = [imagecorruptions.corrupt(image,corruption_name,severity) for image in val_images]
-        val_images = [Image.fromarray(np.uint8(image)).convert('RGB') for image in val_images]
-        for i in range(val_images):
-            val_images[i].save(val_names[i],"PNG")
+        test_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in test_images]
+        test_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in test_images]
         
+        for i in range(len(test_images)):
+            image = Image.fromarray(test_images[i].astype('uint8'), 'RGB')
+            image.save(test_names[i],"PNG")
+
+        if not apply_on_train:
+
+            val_images = [np.asarray(Image.open(image)) for image in val_images]
+            val_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in val_images]
+            val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in val_images]
+            
+            for i in range(len(val_images)):
+                image = Image.fromarray(val_images[i].astype('uint8'), 'RGB')
+                image.save(val_names[i],"PNG")
+            
     
 
 
@@ -162,19 +176,23 @@ if __name__ == "__main__":
                            "speedlimit": 2,
                            "crosswalk": 3}    
     
-    #create folder for corrupted images 
+    #create folder for corrupted images
+    os.chdir("../Road_Sign_Dataset")
     currentdir = os.getcwd()
+    
     added = "_"+parser.corruption_name +"_train" if parser.apply_on_train else "_"+parser.corruption.name
+    added = added + str(int(parser.severity))
     added = added + "_test" if parser.apply_on_test else added 
     path = currentdir + added
     os.mkdir(path)
 
     #copy images from original folder
-    os.chdir("../"+path)
-
-    shutil.copytree(currentdir+"/images", path)
-    shutil.copytree(currentdir+"/annotations", path)
-
+    
+    os.chdir("../"+"Road_Sign_Dataset"+added)
+    
+    shutil.copytree(currentdir+"\\images", path+"\\images")
+    shutil.copytree(currentdir+"\\annotations", path+"\\annotations")
+    time.sleep(5)
     #manipulate coppied images
 
     annotations = [os.path.join('annotations', x) for x in os.listdir('annotations') if x[-3:] == "xml"]
@@ -197,9 +215,9 @@ if __name__ == "__main__":
     
     train_images, val_images, train_annotations, val_annotations = train_test_split(images, annotations, test_size = 0.2, random_state = 1)
     val_images, test_images, val_annotations, test_annotations = train_test_split(val_images, val_annotations, test_size = 0.5, random_state = 1)
-
-    corrupt_dataset(parser.corruption_name,parser.severity,parser.apply_on_train,parser.apply_on_test,train_images,val_images,test_images)
-
+    print("start_corruption")
+    corrupt_dataset(parser.corruption_name,int(parser.severity),parser.apply_on_train,parser.apply_on_test,train_images,val_images,test_images)
+    print("finish_corruption")
     move_files_to_folder(train_images, 'images/train')
     move_files_to_folder(val_images, 'images/val/')
     move_files_to_folder(test_images, 'images/test/')
@@ -209,12 +227,13 @@ if __name__ == "__main__":
 
     currentdir = os.getcwd()
     os.rename(currentdir+"/annotations",currentdir+"/labels")
-    os.chdir("../../yolov5/data")
+    os.chdir("../yolov5/data")
 
-    with open("coco128.yaml", "r") as stream:
+    with open("coco128.yaml", "r", encoding='utf8') as stream:
         try:
 
             data=yaml.safe_load(stream)
+            data["path"] = path
             data['train'] = path+"/images/train/" 
             data["val"] = path+"/images/val/"
             data["test"] = path+"/images/test/"
@@ -228,9 +247,12 @@ if __name__ == "__main__":
     stream = open(name, 'w')
     yaml.dump(data, stream)
     stream.close()
-    name_train = "python3 train.py --img 640 --cfg yolov5s.yaml --hyp hyp.scratch.yaml --batch 32 --epochs 100 --data"+ name +"--weights yolov5s.pt --workers 24 --name yolo_road_det"+added
-    os.chdir("../")
-    subprocess(name_train)
-    name_test = "python3 test.py --weights runs/train/"+"yolo_road_det"+added+"/weights/best.pt --data"+ name +"--task test --name "+ "yolo_road_det"+added
     
+    name_train = "python3 train.py --img 640 --cfg yolov5s.yaml --hyp hyp.no-augmentation.yaml --batch 32 --epochs 100 --data "+ name +" --weights yolov5s.pt --workers 24 --name yolo_road_det"+added
+    os.chdir("../")
+    name_test = "python3 test.py --weights runs/train/"+"yolo_road_det"+added+"/weights/best.pt --data "+ name +" --task test --name "+ "yolo_road_det"+added
+    print(name_train)
+    print(name_test)
+    subprocess.call(name_train)
+    subprocess.call(name_test)
     
