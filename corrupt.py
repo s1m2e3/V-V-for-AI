@@ -4,13 +4,19 @@ import os
 import random
 import time
 import shutil
+import sys
+
+
+from itertools import product
+ 
+import pkg_resources
 from sklearn.model_selection import train_test_split
 import xml.etree.ElementTree as ET
 from xml.dom import minidom
 from tqdm import tqdm
 from PIL import Image, ImageDraw
 import numpy as np
-import matplotlib.pyplot as plt
+
 import argparse
 import shutil
 import yaml
@@ -104,10 +110,71 @@ def move_files_to_folder(list_of_files, destination_folder):
             print(f)
             assert False
 
+def resize(image_array,ratio):
+        
+        image = Image.fromarray(image_array, 'RGB')
+        width = image.size[0]
+        height = image.size[1]
+        newWidth = int(round(width * ratio))
+        newHeight = int(round(height * ratio))
+        newImage = image.resize((newWidth, newHeight), Image.Resampling.LANCZOS)
+        newImage.format = image.format
+        return np.asarray(newImage)
 
-def corrupt_dataset(corruption_name,severity,apply_on_train,apply_on_test,train_images,val_images,test_images):
+def extra_corruption(image, corruption_name):
+
+    if "resolution_change" and "2x" in corruption_name:
+        
+        ratio = 2.0
+        new_image = resize(image,ratio)
+
+    elif "resolution_change" and "x_2" in corruption_name:
+        
+        ratio = 0.5
+        new_image = resize(image,ratio)
+    
+    elif "lense_crush" and "gaussian" in corruption_name:
+        
+        width = np.arange(image.shape(0))
+        height = np.arange(image.shape(1))
+        indices = list(product(width,height))
+        size = int(0.1*width*height)
+        
+        if "gaussian" in corruption_name:
+
+            indices = np.random.choice(indices,size = size,replace=False)
+            image[indices] = 0
+            new_image = image
+
+        if "directed" in corruption_name:
+
+            
+            choose_center =  np.where(image==np.random.choice(image,size=1))[0]
+            up = choose_center[0]
+            right = choose_center[1]
+            up_max = image.shape[0]-up>100
+            up_min = up>100
+            right_max = image.shape[1]-right>100
+            right_min = right >100
+            while not up_max or not up_min or not right_max or not right_min:
+                choose_center =  np.where(image==np.random.choice(image,size=1))[0]
+                up = choose_center[0]
+                right = choose_center[1]
+                up_max = image.shape[0]-up>100
+                up_min = up>100
+                right_max = image.shape[1]-right>100
+                right_min = right >100
+            indices_up = np.arange(up-100,up+100)
+            indices_right = np.arange(right-100,right+100)
+            indices = np.random.choice(indices,size=size,replace = False)
+            image[indices] = 0
+            new_image = image
+    return new_image
     
 
+
+def corrupt_dataset(corruption_name,train_images,val_images,test_images,severity=4,apply_on_train=True,apply_on_test=True):
+    
     train_names = copy.deepcopy(train_images)
     val_names = copy.deepcopy(val_images)
     test_names = copy.deepcopy(test_images)
@@ -117,16 +184,24 @@ def corrupt_dataset(corruption_name,severity,apply_on_train,apply_on_test,train_
 
         train_images = [np.asarray(Image.open(image)) for image in train_images]
         train_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in train_images]
-        train_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in train_images]
-        
+        if corruption_name in imagecorruptions.get_corruption_names():
+            train_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=3) for image in train_images]
+        else:
+            print("in extra corruption")
+            train_images = [extra_corruption(image,corruption_name) for image in train_images]
+            
         for i in range(len(train_images)):
             image = Image.fromarray(train_images[i].astype('uint8'), 'RGB')
             image.save(train_names[i],"PNG")
 
         val_images = [np.asarray(Image.open(image)) for image in val_images]
         val_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in val_images]
-        val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in val_images]
         
+        if corruption_name in imagecorruptions.get_corruption_names():
+            val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=3) for image in val_images]
+        else:
+            val_images = [extra_corruption(image,corruption_name) for image in val_images]
+
         for i in range(len(val_images)):
             image = Image.fromarray(val_images[i].astype('uint8'), 'RGB')
             image.save(val_names[i],"PNG")
@@ -135,7 +210,14 @@ def corrupt_dataset(corruption_name,severity,apply_on_train,apply_on_test,train_
         
         test_images = [np.asarray(Image.open(image)) for image in test_images]
         test_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in test_images]
-        test_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in test_images]
+        
+        
+        if corruption_name in imagecorruptions.get_corruption_names():
+            test_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in test_images]
+        else:
+            test_images = [extra_corruption(image,corruption_name) for image in test_images]
+
+        
         
         for i in range(len(test_images)):
             image = Image.fromarray(test_images[i].astype('uint8'), 'RGB')
@@ -145,7 +227,13 @@ def corrupt_dataset(corruption_name,severity,apply_on_train,apply_on_test,train_
 
             val_images = [np.asarray(Image.open(image)) for image in val_images]
             val_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in val_images]
-            val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in val_images]
+            
+            
+            if corruption_name in imagecorruptions.get_corruption_names():
+                val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in val_images]
+            else:
+                val_images = [extra_corruption(image,corruption_name) for image in val_images]
+
             
             for i in range(len(val_images)):
                 image = Image.fromarray(val_images[i].astype('uint8'), 'RGB')
@@ -160,7 +248,7 @@ def creater_parser():
     parser.add_argument('--corruption_name', type=str, default="gaussian_blur" ,help='name of the corruption as defined by the imagecorruptions library')
     parser.add_argument('--severity', type=int, default=1, help='severity of the corruption')
     parser.add_argument('--apply_on_train', type=bool, default=False , help='dataset.yaml path')
-    parser.add_argument('--apply_on_test', type=bool, default=True , help='dataset.yaml path')
+    parser.add_argument('--apply_on_test', type=bool, default=False , help='dataset.yaml path')
 
     return parser.parse_args() 
 
@@ -179,19 +267,21 @@ if __name__ == "__main__":
     #create folder for corrupted images
     os.chdir("../Road_Sign_Dataset")
     currentdir = os.getcwd()
-    
-    added = "_"+parser.corruption_name +"_train" if parser.apply_on_train else "_"+parser.corruption.name
-    added = added + str(int(parser.severity))
-    added = added + "_test" if parser.apply_on_test else added 
+    print(parser)
+    added = "_"+parser.corruption_name
+    # added = "_"+parser.corruption_name +"_train" if parser.apply_on_train else "_"+parser.corruption.name
+    # added = added + str(int(parser.severity))
+    # added = added + "_test" if parser.apply_on_test else added 
     path = currentdir + added
+    
     os.mkdir(path)
-
-    #copy images from original folder
-    
     os.chdir("../"+"Road_Sign_Dataset"+added)
-    
+    #copy images from original folder
     shutil.copytree(currentdir+"\\images", path+"\\images")
     shutil.copytree(currentdir+"\\annotations", path+"\\annotations")
+    
+    
+    
     time.sleep(5)
     #manipulate coppied images
 
@@ -216,7 +306,7 @@ if __name__ == "__main__":
     train_images, val_images, train_annotations, val_annotations = train_test_split(images, annotations, test_size = 0.2, random_state = 1)
     val_images, test_images, val_annotations, test_annotations = train_test_split(val_images, val_annotations, test_size = 0.5, random_state = 1)
     print("start_corruption")
-    corrupt_dataset(parser.corruption_name,int(parser.severity),parser.apply_on_train,parser.apply_on_test,train_images,val_images,test_images)
+    corrupt_dataset(parser.corruption_name,train_images,val_images,test_images)
     print("finish_corruption")
     move_files_to_folder(train_images, 'images/train')
     move_files_to_folder(val_images, 'images/val/')
@@ -247,12 +337,14 @@ if __name__ == "__main__":
     stream = open(name, 'w')
     yaml.dump(data, stream)
     stream.close()
-    
-    name_train = "python3 train.py --img 640 --cfg yolov5s.yaml --hyp hyp.no-augmentation.yaml --batch 32 --epochs 100 --data "+ name +" --weights yolov5s.pt --workers 24 --name yolo_road_det"+added
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    name_train = "python train.py --img 640 --cfg yolov5s.yaml --hyp hyp.no-augmentation.yaml --batch 16 --epochs 100 --data "+ name +" --weights yolov5s.pt --workers 24 --name yolo_road_det"+added
     os.chdir("../")
-    name_test = "python3 test.py --weights runs/train/"+"yolo_road_det"+added+"/weights/best.pt --data "+ name +" --task test --name "+ "yolo_road_det"+added
-    print(name_train)
-    print(name_test)
-    subprocess.call(name_train)
-    subprocess.call(name_test)
+    
+    name_infer = "python detect.py --source ../Road_Sign_Dataset"+added+"/images/test --weights runs/train/"+"yolo_road_det"+added+"/weights/best.pt --conf 0.25 --name yolo_road_det"+added
+    name_val = "python val.py --data "+name +" --weights runs/train/yolo_road_det"+ added + "/weights/best.pt --img 640 --task test"
+    # subprocess.call(name_train)
+    # subprocess.call(name_infer)
+    # subprocess.call(name_val)
+    print("finished_testing")
     
