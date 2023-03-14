@@ -67,6 +67,20 @@ def extract_info_from_xml(xml_file):
     
     return info_dict
 
+def update_xml(xml_file,new_image):
+    tree = ET.parse(xml_file)
+    root = tree.getroot()
+    
+    # Parse the XML Tree
+    for elem in root:
+       
+        # Get the image size
+        if elem.tag == "size":
+            elem.set("width",str(new_image.shape[0]))
+            elem.set("height",str(new_image.shape[1]))
+    tree.write(xml_file)  
+    
+
 
 # Convert the info dict to the required yolo format and write it to disk
 def convert_to_yolov5(info_dict):
@@ -96,7 +110,7 @@ def convert_to_yolov5(info_dict):
         print_buffer.append("{} {:.3f} {:.3f} {:.3f} {:.3f}".format(class_id, b_center_x, b_center_y, b_width, b_height))
         
     # Name of the file which we have to save 
-    save_file_name = os.path.join("annotations", info_dict["filename"].replace("png", "txt"))
+    save_file_name = os.path.join("annotations"+sub, info_dict["filename"].replace("png", "txt"))
     
     # Save the annotation to disk
     print("\n".join(print_buffer), file= open(save_file_name, "w"))
@@ -121,18 +135,17 @@ def resize(image_array,ratio):
         newImage.format = image.format
         return np.asarray(newImage)
 
-def extra_corruption(image, corruption_name):
+def extra_corruption(image, corruption_name,annotation):
 
     if "resolution_change" and "2x" in corruption_name:
-        
-        ratio = 2.0
+        if "2x" in corruption_name:
+            ratio = 2.0
+        elif "x_2" in corruption_name:
+            ratio=0.5
         new_image = resize(image,ratio)
+        update_xml(annotation,new_image)
 
-    elif "resolution_change" and "x_2" in corruption_name:
-        
-        ratio = 0.5
-        new_image = resize(image,ratio)
-    
+
     elif "lense_crush" and "gaussian" in corruption_name:
         
         width = np.arange(image.shape(0))
@@ -148,7 +161,6 @@ def extra_corruption(image, corruption_name):
 
         if "directed" in corruption_name:
 
-            
             choose_center =  np.where(image==np.random.choice(image,size=1))[0]
             up = choose_center[0]
             right = choose_center[1]
@@ -169,11 +181,12 @@ def extra_corruption(image, corruption_name):
             indices = np.random.choice(indices,size=size,replace = False)
             image[indices] = 0
             new_image = image
+
     return new_image
     
 
 
-def corrupt_dataset(corruption_name,train_images,val_images,test_images,severity=4,apply_on_train=True,apply_on_test=True):
+def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_annotations,val_annotations,test_annotations,severity=4,apply_on_train=True,apply_on_test=True):
     
     train_names = copy.deepcopy(train_images)
     val_names = copy.deepcopy(val_images)
@@ -188,7 +201,7 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,severity
             train_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=3) for image in train_images]
         else:
             print("in extra corruption")
-            train_images = [extra_corruption(image,corruption_name) for image in train_images]
+            train_images = [extra_corruption(image,corruption_name,train_annotations) for image in train_images]
             
         for i in range(len(train_images)):
             image = Image.fromarray(train_images[i].astype('uint8'), 'RGB')
@@ -200,7 +213,7 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,severity
         if corruption_name in imagecorruptions.get_corruption_names():
             val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=3) for image in val_images]
         else:
-            val_images = [extra_corruption(image,corruption_name) for image in val_images]
+            val_images = [extra_corruption(image,corruption_name,val_annotations) for image in val_images]
 
         for i in range(len(val_images)):
             image = Image.fromarray(val_images[i].astype('uint8'), 'RGB')
@@ -215,7 +228,7 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,severity
         if corruption_name in imagecorruptions.get_corruption_names():
             test_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in test_images]
         else:
-            test_images = [extra_corruption(image,corruption_name) for image in test_images]
+            test_images = [extra_corruption(image,corruption_name,test_annotations) for image in test_images]
 
         
         
@@ -240,7 +253,11 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,severity
                 image.save(val_names[i],"PNG")
             
     
+def convert_annotations(annotations):
 
+    for ann in tqdm(annotations):
+        info_dict = extract_info_from_xml(ann)
+        convert_to_yolov5(info_dict)
 
 def creater_parser():
     
@@ -283,31 +300,29 @@ if __name__ == "__main__":
     
     
     time.sleep(5)
-    #manipulate coppied images
-
-    annotations = [os.path.join('annotations', x) for x in os.listdir('annotations') if x[-3:] == "xml"]
-    annotations.sort()
-
-    # Convert and save the annotations
-    for ann in tqdm(annotations):
-        info_dict = extract_info_from_xml(ann)
-        convert_to_yolov5(info_dict)
-    annotations = [os.path.join('annotations', x) for x in os.listdir('annotations') if x[-3:] == "txt"]
-
     # Read images and annotations
     images = [os.path.join('images', x) for x in os.listdir('images')]
-    annotations = [os.path.join('annotations', x) for x in os.listdir('annotations') if x[-3:] == "txt"]
+    annotations = [os.path.join('annotations', x) for x in os.listdir('annotations') if x[-3:] == "xml"]
+    annotations.sort()
+    
 
     images.sort()
     annotations.sort()
 
     # Split the dataset into train-valid-test splits 
-    
     train_images, val_images, train_annotations, val_annotations = train_test_split(images, annotations, test_size = 0.2, random_state = 1)
     val_images, test_images, val_annotations, test_annotations = train_test_split(val_images, val_annotations, test_size = 0.5, random_state = 1)
     print("start_corruption")
-    corrupt_dataset(parser.corruption_name,train_images,val_images,test_images)
+    corrupt_dataset(parser.corruption_name,train_images,val_images,test_images,train_annotations,val_annotations,test_annotations)
     print("finish_corruption")
+
+    # Convert and save the annotations
+    convert_annotations(annotations)
+    train_annotations = map(lambda string: string.replace(".xml",".txt") ,train_annotations)
+    val_annotations = map(lambda string: string.replace(".xml",".txt"),val_annotations)
+    test_annotations = map(lambda string: string.replace(".xml",".txt"),test_annotations)
+
+
     move_files_to_folder(train_images, 'images/train')
     move_files_to_folder(val_images, 'images/val/')
     move_files_to_folder(test_images, 'images/test/')
