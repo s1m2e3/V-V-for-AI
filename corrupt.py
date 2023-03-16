@@ -68,6 +68,7 @@ def extract_info_from_xml(xml_file):
     return info_dict
 
 def update_xml(xml_file,new_image):
+    
     tree = ET.parse(xml_file)
     root = tree.getroot()
     
@@ -79,8 +80,7 @@ def update_xml(xml_file,new_image):
             elem.set("width",str(new_image.shape[0]))
             elem.set("height",str(new_image.shape[1]))
     tree.write(xml_file)  
-    
-
+   
 
 # Convert the info dict to the required yolo format and write it to disk
 def convert_to_yolov5(info_dict):
@@ -110,7 +110,8 @@ def convert_to_yolov5(info_dict):
         print_buffer.append("{} {:.3f} {:.3f} {:.3f} {:.3f}".format(class_id, b_center_x, b_center_y, b_width, b_height))
         
     # Name of the file which we have to save 
-    save_file_name = os.path.join("annotations"+sub, info_dict["filename"].replace("png", "txt"))
+    
+    save_file_name = os.path.join("annotations", info_dict["filename"].replace("png", "txt"))
     
     # Save the annotation to disk
     print("\n".join(print_buffer), file= open(save_file_name, "w"))
@@ -133,18 +134,20 @@ def resize(image_array,ratio):
         newHeight = int(round(height * ratio))
         newImage = image.resize((newWidth, newHeight), Image.Resampling.LANCZOS)
         newImage.format = image.format
+        
         return np.asarray(newImage)
 
 def extra_corruption(image, corruption_name,annotation):
-
-    if "resolution_change" and "2x" in corruption_name:
+    
+    if "resolution_change" in corruption_name:
         if "2x" in corruption_name:
             ratio = 2.0
         elif "x_2" in corruption_name:
             ratio=0.5
         new_image = resize(image,ratio)
         update_xml(annotation,new_image)
-
+        
+        
 
     elif "lense_crush" and "gaussian" in corruption_name:
         
@@ -158,6 +161,7 @@ def extra_corruption(image, corruption_name,annotation):
             indices = np.random.choice(indices,size = size,replace=False)
             image[indices] = 0
             new_image = image
+            return new_image
 
         if "directed" in corruption_name:
 
@@ -181,9 +185,10 @@ def extra_corruption(image, corruption_name,annotation):
             indices = np.random.choice(indices,size=size,replace = False)
             image[indices] = 0
             new_image = image
-
-    return new_image
+            return new_image
     
+    return new_image
+        
 
 
 def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_annotations,val_annotations,test_annotations,severity=4,apply_on_train=True,apply_on_test=True):
@@ -201,8 +206,8 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
             train_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=3) for image in train_images]
         else:
             print("in extra corruption")
-            train_images = [extra_corruption(image,corruption_name,train_annotations) for image in train_images]
-            
+            train_images = [extra_corruption(train_images[i],corruption_name,train_annotations[i]) for i in range(len(train_images))]
+            print("finished extra corruption")
         for i in range(len(train_images)):
             image = Image.fromarray(train_images[i].astype('uint8'), 'RGB')
             image.save(train_names[i],"PNG")
@@ -213,7 +218,8 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
         if corruption_name in imagecorruptions.get_corruption_names():
             val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=3) for image in val_images]
         else:
-            val_images = [extra_corruption(image,corruption_name,val_annotations) for image in val_images]
+            val_images = [extra_corruption(val_images[i],corruption_name,val_annotations[i]) for i in range(len(val_images))]
+            
 
         for i in range(len(val_images)):
             image = Image.fromarray(val_images[i].astype('uint8'), 'RGB')
@@ -228,7 +234,8 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
         if corruption_name in imagecorruptions.get_corruption_names():
             test_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in test_images]
         else:
-            test_images = [extra_corruption(image,corruption_name,test_annotations) for image in test_images]
+            test_images = [extra_corruption(test_images[i],corruption_name,test_annotations[i]) for i in range(len(test_images))]
+            
 
         
         
@@ -245,7 +252,8 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
             if corruption_name in imagecorruptions.get_corruption_names():
                 val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=severity) for image in val_images]
             else:
-                val_images = [extra_corruption(image,corruption_name) for image in val_images]
+                val_images = [extra_corruption(val_images[i],corruption_name,val_annotations[i]) for i in range(len(val_images))]
+                
 
             
             for i in range(len(val_images)):
@@ -284,7 +292,7 @@ if __name__ == "__main__":
     #create folder for corrupted images
     os.chdir("../Road_Sign_Dataset")
     currentdir = os.getcwd()
-    print(parser)
+    
     added = "_"+parser.corruption_name
     # added = "_"+parser.corruption_name +"_train" if parser.apply_on_train else "_"+parser.corruption.name
     # added = added + str(int(parser.severity))
@@ -358,8 +366,8 @@ if __name__ == "__main__":
     
     name_infer = "python detect.py --source ../Road_Sign_Dataset"+added+"/images/test --weights runs/train/"+"yolo_road_det"+added+"/weights/best.pt --conf 0.25 --name yolo_road_det"+added
     name_val = "python val.py --data "+name +" --weights runs/train/yolo_road_det"+ added + "/weights/best.pt --img 640 --task test"
-    # subprocess.call(name_train)
-    # subprocess.call(name_infer)
-    # subprocess.call(name_val)
+    subprocess.call(name_train)
+    subprocess.call(name_infer)
+    subprocess.call(name_val)
     print("finished_testing")
     
