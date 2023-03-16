@@ -146,21 +146,23 @@ def extra_corruption(image, corruption_name,annotation):
             ratio=0.5
         new_image = resize(image,ratio)
         update_xml(annotation,new_image)
-        
+        return new_image
         
 
-    elif "lense_crush" and "gaussian" in corruption_name:
+    elif "lense_crush" in corruption_name:
         
-        width = np.arange(image.shape(0))
-        height = np.arange(image.shape(1))
+        width = np.arange(image.shape[0])
+        height = np.arange(image.shape[1])
         indices = list(product(width,height))
-        size = int(0.1*width*height)
+        size = int(0.1*image.shape[0]*image.shape[1])
         
         if "gaussian" in corruption_name:
 
-            indices = np.random.choice(indices,size = size,replace=False)
-            image[indices] = 0
+            indices = random.choices(indices,k=size)
+            
             new_image = image
+            for index in indices:
+                new_image[index]=0
             return new_image
 
         if "directed" in corruption_name:
@@ -187,7 +189,7 @@ def extra_corruption(image, corruption_name,annotation):
             new_image = image
             return new_image
     
-    return new_image
+    
         
 
 
@@ -200,8 +202,8 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
     
     if apply_on_train:
 
-        train_images = [np.asarray(Image.open(image)) for image in train_images]
-        train_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in train_images]
+        train_images = [np.array(Image.open(image)) for image in train_images]
+        train_images = [np.array(Image.fromarray(np.uint8(image)).convert('RGB')) for image in train_images]
         if corruption_name in imagecorruptions.get_corruption_names():
             train_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=3) for image in train_images]
         else:
@@ -212,8 +214,8 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
             image = Image.fromarray(train_images[i].astype('uint8'), 'RGB')
             image.save(train_names[i],"PNG")
 
-        val_images = [np.asarray(Image.open(image)) for image in val_images]
-        val_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in val_images]
+        val_images = [np.array(Image.open(image)) for image in val_images]
+        val_images = [np.array(Image.fromarray(np.uint8(image)).convert('RGB')) for image in val_images]
         
         if corruption_name in imagecorruptions.get_corruption_names():
             val_images = [imagecorruptions.corrupt(image,corruption_name=corruption_name,severity=3) for image in val_images]
@@ -227,8 +229,8 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
 
     if apply_on_test:
         
-        test_images = [np.asarray(Image.open(image)) for image in test_images]
-        test_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in test_images]
+        test_images = [np.array(Image.open(image)) for image in test_images]
+        test_images = [np.array(Image.fromarray(np.uint8(image)).convert('RGB')) for image in test_images]
         
         
         if corruption_name in imagecorruptions.get_corruption_names():
@@ -245,8 +247,8 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
 
         if not apply_on_train:
 
-            val_images = [np.asarray(Image.open(image)) for image in val_images]
-            val_images = [np.asarray(Image.fromarray(np.uint8(image)).convert('RGB')) for image in val_images]
+            val_images = [np.array(Image.open(image)) for image in val_images]
+            val_images = [np.array(Image.fromarray(np.uint8(image)).convert('RGB')) for image in val_images]
             
             
             if corruption_name in imagecorruptions.get_corruption_names():
