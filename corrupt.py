@@ -153,39 +153,46 @@ def extra_corruption(image, corruption_name,annotation):
         
         width = np.arange(image.shape[0])
         height = np.arange(image.shape[1])
-        indices = list(product(width,height))
-        size = int(0.1*image.shape[0]*image.shape[1])
+        depth = np.arange(image.shape[2])
+        indices = list(product(width,height,depth))
+        size = int(0.1*image.shape[0]*image.shape[1]*image.shape[2])
         
         if "gaussian" in corruption_name:
 
             indices = random.choices(indices,k=size)
-            
             new_image = image
             for index in indices:
                 new_image[index]=0
             return new_image
 
         if "directed" in corruption_name:
-
-            choose_center =  np.where(image==np.random.choice(image,size=1))[0]
+            choose_center =  random.choices(indices,k=1)[0]
+           
             up = choose_center[0]
             right = choose_center[1]
-            up_max = image.shape[0]-up>100
+            up_max = image.shape[0]-up>image.shape[0]/4
             up_min = up>100
-            right_max = image.shape[1]-right>100
+            right_max = image.shape[1]-right>image.shape[1]/3
             right_min = right >100
+            
+            
             while not up_max or not up_min or not right_max or not right_min:
-                choose_center =  np.where(image==np.random.choice(image,size=1))[0]
+                choose_center =  random.choices(indices,k=1)[0]
+
                 up = choose_center[0]
                 right = choose_center[1]
-                up_max = image.shape[0]-up>100
+                up_max = image.shape[0]-up>image.shape[0]/4
                 up_min = up>100
-                right_max = image.shape[1]-right>100
+                right_max = image.shape[1]-right>image.shape[1]/3
                 right_min = right >100
-            indices_up = np.arange(up-100,up+100)
-            indices_right = np.arange(right-100,right+100)
-            indices = np.random.choice(indices,size=size,replace = False)
-            image[indices] = 0
+                
+            indices_up = np.arange(int(up-image.shape[0]/4),int(up+image.shape[0]/4))
+            indices_right = np.arange(int(right-image.shape[1]/3),int(right+image.shape[1]/3))
+            indices = list(product(indices_up,indices_right,depth))
+            indices = random.choices(indices,k=size)
+            
+            for index in indices:
+                image[index] = 0
             new_image = image
             return new_image
     
