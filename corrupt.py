@@ -200,13 +200,19 @@ def extra_corruption(image, corruption_name,annotation):
         
 
 
-def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_annotations,val_annotations,test_annotations,severity=4,apply_on_train=True,apply_on_test=True):
+def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_annotations,val_annotations,test_annotations,severity=4,apply_on_train=False,apply_on_test=True):
     
     train_names = copy.deepcopy(train_images)
     val_names = copy.deepcopy(val_images)
     test_names = copy.deepcopy(test_images)
     
-    
+    if "resolution_change" in corruption_name:
+        apply_on_train = False
+    if "none" in corruption_name:
+        apply_on_train = False
+        apply_on_test = False
+    if "--apply_on_train True" in corruption_name:
+        apply_on_train=True
     if apply_on_train:
 
         train_images = [np.array(Image.open(image)) for image in train_images]
@@ -374,7 +380,7 @@ if __name__ == "__main__":
     os.chdir("../")
     
     name_infer = "python detect.py --source ../Road_Sign_Dataset"+added+"/images/test --weights runs/train/"+"yolo_road_det"+added+"/weights/best.pt --conf 0.25 --name yolo_road_det"+added
-    name_val = "python val.py --data "+name +" --weights runs/train/yolo_road_det"+ added + "/weights/best.pt --img 640 --task test"
+    name_val = "python val.py --data "+name +" --weights runs/train/yolo_road_det"+ added + "/weights/best.pt --img 640 --task test --save_txt True"
     subprocess.call(name_train)
     subprocess.call(name_infer)
     subprocess.call(name_val)
