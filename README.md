@@ -74,6 +74,8 @@ Four types of image corruptions have been explored to test the consistency of th
 - Brightness Change
 - Pixel Damaging
 
+Please note that we are using the imagecorruptions packages from bethgelab so in the corruptions we could include all of the ones described in: https://github.com/bethgelab/imagecorruptions. For the sake of the experiment however, only the brightness corruption they provide is being used. The other three were manually built. By manipulating the corrupt scrip the user can incorporate more customary corruptions.
+
 There exists three scripts that control the experiment:
 
 ### Corruption Script:
