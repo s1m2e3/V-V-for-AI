@@ -211,7 +211,7 @@ def corrupt_dataset(corruption_name,train_images,val_images,test_images,train_an
     if "none" in corruption_name:
         apply_on_train = False
         apply_on_test = False
-    if "--apply_on_train True" in corruption_name:
+    if "--corrupt_train True" in corruption_name:
         apply_on_train=True
     if apply_on_train:
 
@@ -285,10 +285,10 @@ def convert_annotations(annotations):
 def creater_parser():
     
     parser = argparse.ArgumentParser()
+    parser.add_argument('--dataset_name', type=str, default="Road_Sign_Dataset" ,help='Name of the dataset directory')
     parser.add_argument('--corruption_name', type=str, default="gaussian_blur" ,help='name of the corruption as defined by the imagecorruptions library')
-    parser.add_argument('--severity', type=int, default=1, help='severity of the corruption')
-    parser.add_argument('--apply_on_train', type=bool, default=False , help='dataset.yaml path')
-    parser.add_argument('--apply_on_test', type=bool, default=False , help='dataset.yaml path')
+    parser.add_argument('--corrupt_train', type=bool, default=False , help='whether or not to corrupt training data')
+    parser.add_argument('--corrupt_test', type=bool, default=False , help='whether or not to corrupt testing data')
 
     return parser.parse_args() 
 
@@ -305,17 +305,16 @@ if __name__ == "__main__":
                            "crosswalk": 3}    
     
     #create folder for corrupted images
-    os.chdir("../Road_Sign_Dataset")
+    os.chdir("../"+parser.dataset_name)
     currentdir = os.getcwd()
     
     added = "_"+parser.corruption_name
-    # added = "_"+parser.corruption_name +"_train" if parser.apply_on_train else "_"+parser.corruption.name
-    # added = added + str(int(parser.severity))
-    # added = added + "_test" if parser.apply_on_test else added 
+    added = "_"+parser.corruption_name +"_train" if parser.corrupt_train else "_"+parser.corruption_name
+    added = added + "_test" if parser.corrupt_test else added 
     path = currentdir + added
     
     os.mkdir(path)
-    os.chdir("../"+"Road_Sign_Dataset"+added)
+    os.chdir("../"+parser.dataset_name+added)
     #copy images from original folder
     shutil.copytree(currentdir+"\\images", path+"\\images")
     shutil.copytree(currentdir+"\\annotations", path+"\\annotations")
@@ -336,7 +335,7 @@ if __name__ == "__main__":
     train_images, val_images, train_annotations, val_annotations = train_test_split(images, annotations, test_size = 0.2, random_state = 1)
     val_images, test_images, val_annotations, test_annotations = train_test_split(val_images, val_annotations, test_size = 0.5, random_state = 1)
     print("start_corruption")
-    corrupt_dataset(parser.corruption_name,train_images,val_images,test_images,train_annotations,val_annotations,test_annotations)
+    corrupt_dataset(parser.corruption_name,train_images,val_images,test_images,train_annotations,val_annotations,test_annotations,apply_on_train=parser.corrupt_train,apply_on_test=parser.corrupt_test)
     print("finish_corruption")
 
     # Convert and save the annotations
@@ -371,18 +370,9 @@ if __name__ == "__main__":
         except yaml.YAMLError as exc:
             print(exc)
 
-    name= "road_sign_data" + added + ".yaml"
+    name= parser.dataset_name + added + ".yaml"
     stream = open(name, 'w')
     yaml.dump(data, stream)
     stream.close()
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    name_train = "python train.py --img 640 --cfg yolov5s.yaml --hyp hyp.no-augmentation.yaml --batch 16 --epochs 100 --data "+ name +" --weights yolov5s.pt --workers 24 --name yolo_road_det"+added
-    os.chdir("../")
     
-    name_infer = "python detect.py --source ../Road_Sign_Dataset"+added+"/images/test --weights runs/train/"+"yolo_road_det"+added+"/weights/best.pt --conf 0.25 --name yolo_road_det"+added
-    name_val = "python val.py --data "+name +" --weights runs/train/yolo_road_det"+ added + "/weights/best.pt --img 640 --task test --save_txt True"
-    subprocess.call(name_train)
-    subprocess.call(name_infer)
-    subprocess.call(name_val)
-    print("finished_testing")
     
